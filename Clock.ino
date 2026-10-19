@@ -6,6 +6,7 @@
 //  1.0.1 Implemented basic clock - 17/09/2026
 //  1.0.2 Added weather observation info - 18/09/2026
 //  1.0.3 Re-arranged display format and added proper temperature symbol - 20/09/2026
+//  1.0.4 Changed time format to AM/PM and adjusted temperature & weather display - 19/10/2026
 
 #include <SPI.h>
 #include <WiFi.h>
@@ -14,6 +15,7 @@
 #include <TFT_eSPI.h>
 #include <time.h>
 
+// FORCE THE CHEAP YELLOW DISPLAY PINS DIRECTLY IN CODE
 #define ST7789_DRIVER
 #define TFT_WIDTH  240
 #define TFT_HEIGHT 320
@@ -61,7 +63,6 @@ int currentHumidity = 0;
 float currentWindSpeed = 0.0;
 int currentWindDirection = 0;
 bool weatherLoaded = false;
-
 unsigned long lastWeatherUpdate = 0;
 const unsigned long WEATHER_INTERVAL = 600000;   // 10 minutes matching your template
 
@@ -137,7 +138,8 @@ void setup() {
   digitalWrite(TFT_BL, LOW); 
 
   tft.init();
-  tft.setRotation(1); // Horizontal landscape mode
+  //tft.setRotation(1); // Horizontal landscape mode
+  tft.setRotation(3); // rotate 180 degree
   tft.invertDisplay(false);
   tft.fillScreen(TFT_BLACK);
 
@@ -184,17 +186,19 @@ void loop() {
     int seconds = timeinfo.tm_sec;
     
     // Calculate 12-hour AM/PM formatting blocks
-    //String ampm = (rawHour >= 12) ? "PM" : "AM";
-    //int hours = rawHour % 12;
-    int hours = rawHour;
-    //if (hours == 0) hours = 12;
+    String ampm = (rawHour >= 12) ? "PM" : "AM";
+    int hours = rawHour % 12;
+    //int hours = rawHour;
+    if (hours == 0) hours = 12;
 
     // Pad metrics out to double digits (HH:MM:SS)
     String hourStr = (hours < 10) ? "0" + String(hours) : String(hours);
     String minStr  = (minutes < 10) ? "0" + String(minutes) : String(minutes);
     String secStr  = (seconds < 10) ? "0" + String(seconds) : String(seconds);
-    //String timeDisplayStr = hourStr + ":" + minStr + ":" + secStr + " " + ampm;
-    String timeDisplayStr = hourStr + ":" + minStr + ":" + secStr;
+    //String timeDisplayStr = hourStr + ":" + minStr + " " + ampm;
+    //String timeDisplayStr = hourStr + ":" + minStr + ":" + secStr;
+    String timeDisplayStr = hourStr + ":" + minStr;
+  
 
     // Format Date line elements: "Day DD/MM/YYYY"
     int dayOfWeekNum = timeinfo.tm_wday;
@@ -208,7 +212,11 @@ void loop() {
 
     // --- 2. RENDER TIME AND DATE LAYERS TO LANDSCAPE DISK ARRAY ---
     tft.setTextColor(0x07FF, TFT_BLACK); // True Cyan color mapping code 0x07FF
-    tft.drawCentreString(timeDisplayStr + " ", 160, 30, 7); 
+    //tft.drawCentreString(timeDisplayStr + " ", 160, 30, 7);
+    tft.drawCentreString(timeDisplayStr + " ", 140, 30, 7);
+    String ampmStr = ampm;
+    tft.drawString(ampmStr, 220, 35, 4);
+ 
 
     tft.setTextColor(TFT_WHITE, TFT_BLACK);
     tft.drawCentreString(dateDisplayStr + " ", 160, 110, 4); 
@@ -220,11 +228,13 @@ void loop() {
     lastWeatherUpdate = now;
     updateWeather();
   }
-
+  
   // --- 4. RENDER DYNAMIC WEATHER BOTTOM ROW BAR ---
   if (weatherLoaded) {
     drawWeatherIcon(12, 175, currentConditionCode);
 
+    // refresh temperature area
+    tft.fillRect(65, 172, 110, 30, TFT_BLACK);
     tft.setTextColor(TFT_YELLOW, TFT_BLACK);
     //tft.drawString(String(currentTemp, 1) + " C", 65, 172, 4); 
     tft.drawString(String(currentTemp, 1), 65, 172, 4);
@@ -232,22 +242,27 @@ void loop() {
     int circleX = 65 + textWidth + 4; // Shift right past the text
     int circleY = 172 + 4;     
     tft.drawCircle(circleX, circleY, 3, TFT_YELLOW); // 3-pixel radius circle
-    tft.drawString("C", circleX + 8, 172, 4);       // Shift down slightly to sit high
+    tft.drawString("c", circleX + 5, 172, 4);       // Shift down slightly to sit high
     
     tft.setTextColor(TFT_GREEN, TFT_BLACK);
-    tft.drawString(getWeatherDesc(currentConditionCode) + "    ", 65, 202, 4);
+    tft.drawString(getWeatherDesc(currentConditionCode) + "    ", 65, 205, 4);
 
     tft.setTextColor(TFT_BLUE, TFT_BLACK);
-    tft.drawString(String(currentHumidity) + "% RH", 165, 175, 4);
+    //tft.drawString(String(currentHumidity) + "% RH", 165, 175, 4);
+    tft.drawString(String(currentHumidity) + "% RH", 162, 172, 4);
 
     tft.setTextColor(TFT_RED, TFT_BLACK);    
     String windStr = String(currentWindSpeed, 0) + " Km/h " + getWindDirectionStr(currentWindDirection);
-    tft.drawString(windStr, 165, 200, 4);
-  } else {
-    tft.setTextColor(TFT_WHITE, TFT_BLACK);
-    tft.drawCentreString("Loading observations...", 160, 190, 2);
-  }
+    //tft.drawString(windStr, 165, 200, 4);
+    tft.drawString(windStr, 162, 205, 4);
+  } 
+  //else {
+  //  tft.setTextColor(TFT_WHITE, TFT_BLACK);
+  //  tft.drawCentreString("Loading observations...", 160, 190, 2);
+  //}
 
+  // reset weatherLoaded flag after refreshing weather condition
+  weatherLoaded = false;
   delay(200); // 5 loop ticks per second drives smooth ticking seconds updates
 }
 
